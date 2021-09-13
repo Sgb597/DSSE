@@ -3,13 +3,14 @@
 #include <unistd.h>
 #include <pthread.h>
 
+
+// These constants are used for the detection of a button press
 #define MAX_SIZE_BYTES              24
 #define MAX_ITERATIONS              115
 #define SLEEP_DURATION              130000     // microseconds
 
 #define COLOR_SENSOR_NOT_AVAILABLE  -1
 #define COLOR_SENSOR_PORT            3
-
 #define MAX_ITERATIONS_COLOR             15
 #define SLEEP_DURATION_COLOR             1       // seconds
 
@@ -51,7 +52,8 @@ int main(void) {
 	pthread_join(reportero, NULL);
 
 	pthread_attr_destroy(&attr);
-
+	ev3_clear_lcd();
+	ev3_quit_lcd();
 	printf("The app has succesfully executed all the way through\n");
 
 	return 0;
@@ -178,13 +180,13 @@ void* btn_monitor(void* arg) {
 		button_pressed = is_button_pressed();
 		if (button_pressed >= 0) {
 			pthread_mutex_lock(&results->mutex);
-			results->button_pressed = "A button has been pressed!";
+			results->button_pressed = "Button press!";
 			pthread_mutex_unlock(&results->mutex);
 			sprintf (button_text, "Button: %s", BUTTON [button_pressed + 1]);
 			printf ("%s\n", button_text);
 		} else {
 			pthread_mutex_lock(&results->mutex);
-			results->button_pressed = "No button has been pressed!";
+			results->button_pressed = "No button press!";
 			pthread_mutex_unlock(&results->mutex);
 		}
 

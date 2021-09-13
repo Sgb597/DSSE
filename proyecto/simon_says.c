@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <ev3c.h>
 #include <stdlib.h>
+#include <pthread.h>
+#include <stdbool.h>
 
 #define MAX_ITERATIONS              15
 #define MAX_ITERATIONS_MVMNT        100
@@ -13,36 +15,66 @@
 #define SLEEP_DURATION_COLOR        1    // seconds
 #define SCREEN_SLEEP				4	// seconds
 
+#define MAX_SIZE_BYTES              50
+
+int scoreboard = 0;
+bool gameover = false;
+
 typedef enum color_command_enum {
 	COL_REFLECT = 0, COL_AMBIENT = 1, COL_COLOR = 2
 } color_command;
 
 int is_button_pressed(void);
-int btn_monitor();
 int movement_checker();
 int color_game();
 void button_game();
-void welcome();
+int welcome();
 void wrong_answer();
 void right_answer();
+void* reader(void *arg);
+
+pthread_mutex_t mutex;
 
 int main(){
+	char buffer[MAX_SIZE_BYTES];
 	int start_button = 0;
+
+	pthread_t reportero;
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
 
 	//  ALERT!!! STOP  CLEARING THE LCD WHEN IT'S ALREADY BEEN CLEARED
 
-	welcome();
+	start_button = welcome(start_button, 4);
 
-	if (btn_monitor(start_button) == 4) {
+	if (start_button == 4) {
 
 		ev3_init_lcd();
 		ev3_text_lcd_normal(50,50,"Get Ready!!");
 		sleep(SCREEN_SLEEP);
 		ev3_clear_lcd();
 
-		color_game();
-		button_game();
+		pthread_create(&reportero, &attr, reader, NULL);
 
+//		color_game();
+		button_game();
+		gameover = true;
+		printf("BACK TO MAIN\n");
+		sleep(SLEEP_DURATION_COLOR);
+
+		printf("about to join thread reportero\n");
+
+		pthread_join(reportero, NULL);
+		pthread_attr_destroy(&attr);
+		printf("REPORTERO DESTOYED\n");
+
+		sprintf(buffer, "Your final score is: %d\n", scoreboard);
+		printf("buffer created\n");
+		printf("%s", buffer);
+		ev3_text_lcd_normal(00,50,buffer);
+		sleep(SCREEN_SLEEP);
+
+		ev3_clear_lcd();
 		ev3_quit_lcd();
 
 	} else {
@@ -60,7 +92,7 @@ int main(){
 	return EXIT_SUCCESS;
 }
 
-void welcome(){
+int welcome(int button_pressed){
 	ev3_init_lcd();
 	ev3_text_lcd_normal(15,50,"Welcome to:");
 	ev3_text_lcd_normal(15,70,"The Robot Says Game!");
@@ -70,11 +102,13 @@ void welcome(){
 
 	ev3_text_lcd_normal(25,50,"Press the center");
 	ev3_text_lcd_normal(25,70,"button to start!");
-	sleep(SCREEN_SLEEP);
+	button_pressed = movement_checker(button_pressed);
 
 
 	ev3_clear_lcd();
 	ev3_quit_lcd();
+
+	return button_pressed;
 }
 
 void button_game(){
@@ -162,7 +196,7 @@ void button_game(){
 
 // This is a function similar to btn_monitor but it has been adapted specially for the button game implemented into the robot.
 // It'll check the button pressed by the user but it'll stop checking once it has verified the desired button has been pressed
-int movement_checker(int btn_passed, int desired_position){
+int movement_checker(int btn_passed){
 
 	// Local variables
 	int index, button_pressed;
@@ -171,7 +205,6 @@ int movement_checker(int btn_passed, int desired_position){
 	ev3_init_button();
 
 	printf ("btn_passed b4 checking in mvmnt checker %d\n", btn_passed);
-	printf ("position value b4 checking in mvmnt checker %d\n", desired_position);
 
 	// Main loop
 	for (index = 0; index < MAX_ITERATIONS_MVMNT; index++) {
@@ -180,34 +213,7 @@ int movement_checker(int btn_passed, int desired_position){
 			btn_passed = button_pressed;
 			printf ("btn_passed value in mvmnt checker %d\n", btn_passed);
 			printf ("button_pressed value in mvmnt checker %d\n", button_pressed);
-			printf ("position value in mvmnt checker %d\n", desired_position);
 			break;
-		}
-		// pseudo-periodic activation
-		usleep (SLEEP_DURATION);
-	}
-
-	//  Finish & close devices
-	ev3_quit_button();
-
-	return btn_passed;
-}
-
-int btn_monitor(int btn_passed){
-
-	// Local variables
-	int index, button_pressed;
-
-	// Init devices
-	ev3_init_button();
-
-	// Main loop
-	for (index = 0; index < MAX_ITERATIONS; index++) {
-		button_pressed = is_button_pressed();
-		if (button_pressed >= 0 ) {
-			printf ("Button number %d\n", button_pressed);
-			btn_passed = button_pressed;
-			printf ("Button number %d\n", btn_passed);
 		}
 		// pseudo-periodic activation
 		usleep (SLEEP_DURATION);
@@ -340,9 +346,9 @@ void wrong_answer(){
 	// Init LEDs and LCD
 	ev3_init_led();
 
-	ev3_text_lcd_normal(70,50,"Oops!");
+	ev3_text_lcd_normal(50,50,"Oops!");
 	ev3_text_lcd_normal(50,70,"Pay attention");
-	ev3_text_lcd_normal(60,90,"next time!");
+	ev3_text_lcd_normal(50,90,"next time!");
 
 	ev3_set_led(LEFT_LED,GREEN_LED,0);
 	ev3_set_led(RIGHT_LED,GREEN_LED,0);
@@ -355,6 +361,12 @@ void wrong_answer(){
 	ev3_set_led(LEFT_LED,RED_LED,0);
 	ev3_set_led(RIGHT_LED,GREEN_LED,0);
 	ev3_set_led(RIGHT_LED,RED_LED,0);
+
+	if (scoreboard != 0) {
+		pthread_mutex_lock(&mutex);
+		scoreboard--;
+		pthread_mutex_unlock(&mutex);
+	}
 
 	ev3_clear_lcd();
 	ev3_quit_led();
@@ -381,9 +393,30 @@ void right_answer(){
 	ev3_set_led(RIGHT_LED,GREEN_LED,0);
 	ev3_set_led(RIGHT_LED,RED_LED,0);
 
+	pthread_mutex_lock(&mutex);
+	scoreboard++;
+	pthread_mutex_unlock(&mutex);
+
 	ev3_clear_lcd();
 	ev3_quit_led();
 }
 
+void* reader(void *arg) {
+	//ev3_init_lcd();
 
+	printf("Reporter thread is up and running\n");
+
+	while (gameover != true){
+		//ev3_clear_lcd();
+		pthread_mutex_lock(&mutex);
+		printf("Your scoreboard so far is = %d \n", scoreboard);
+		pthread_mutex_unlock(&mutex);
+		sleep(SLEEP_DURATION_COLOR);
+	}
+
+	printf("Game Over: %s\n", gameover ? "true" : "false");
+
+	//ev3_clear_lcd();
+	//ev3_quit_lcd();
+}
 

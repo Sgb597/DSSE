@@ -56,21 +56,15 @@ int main(){
 
 		pthread_create(&reportero, &attr, reader, NULL);
 
-//		color_game();
+		color_game();
 		button_game();
 		gameover = true;
-		printf("BACK TO MAIN\n");
 		sleep(SLEEP_DURATION_COLOR);
-
-		printf("about to join thread reportero\n");
 
 		pthread_join(reportero, NULL);
 		pthread_attr_destroy(&attr);
-		printf("REPORTERO DESTOYED\n");
 
 		sprintf(buffer, "Your final score is: %d\n", scoreboard);
-		printf("buffer created\n");
-		printf("%s", buffer);
 		ev3_text_lcd_normal(00,50,buffer);
 		sleep(SCREEN_SLEEP);
 
@@ -191,7 +185,6 @@ void button_game(){
 
 	//  Finish & close devices
 	ev3_quit_button();
-	ev3_quit_lcd();
 }
 
 // This is a function similar to btn_monitor but it has been adapted specially for the button game implemented into the robot.
@@ -337,7 +330,6 @@ int color_game() {
     printf ("\n*** Finishing color sensor application... OK***\n");
 
     ev3_clear_lcd();
-    ev3_quit_lcd();
     ev3_delete_sensors (sensors);
 }
 
@@ -402,12 +394,10 @@ void right_answer(){
 }
 
 void* reader(void *arg) {
-	//ev3_init_lcd();
 
 	printf("Reporter thread is up and running\n");
 
 	while (gameover != true){
-		//ev3_clear_lcd();
 		pthread_mutex_lock(&mutex);
 		printf("Your scoreboard so far is = %d \n", scoreboard);
 		pthread_mutex_unlock(&mutex);
@@ -415,8 +405,5 @@ void* reader(void *arg) {
 	}
 
 	printf("Game Over: %s\n", gameover ? "true" : "false");
-
-	//ev3_clear_lcd();
-	//ev3_quit_lcd();
 }
 
